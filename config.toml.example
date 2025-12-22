@@ -1,0 +1,37 @@
+# Where to connect
+host = "localhost:6667"
+# Whether to skip TLS verification (set fingerprints below)
+# insecure_skip_verify = "false"
+# List of TLS fingerprints to consider as verified
+# tls_fingerprints = []
+# The bot's nickname
+nick = "sb"
+# The prefix to use, e.g. sb
+# Without a leading ! or @
+prefix = "sb"
+# The ports to bind to for DCC connections.
+# If more transfers are started than the number of ports, they will be queued.
+ports = [1111]
+# IPV4 address of the DCC server, or auto to retrieve from API
+ip = "auto"
+# What channels to join
+channels = ["#test"]
+# The ad. If set to "", it won't send, but slots will if ad_channels is set.
+ad = "Type: @$prefix for my list of $totalFiles files. Updated: $date."
+# What channels to send the ad and slots messages to
+ad_channels = ["#test"]
+# How often to send the ad and slots messages, in seconds
+ad_timer = 900
+# The paths to generate the list from.
+listpaths = ["/files"]
+# The initial command to send to the IRC server, before joining a channel.
+# initial_command = "privmsg nickserv :identify password"
+# Additional lists (optional)
+# All directories must be in listpaths
+# lists = [
+# {name="list1", paths=["/path1"]},
+# ]
+# The controller of the bot, optional
+# controller = "owner"
+# Optional list of prefixes to remove from directory names.
+# removed_prefixes = ["/home/username"]
