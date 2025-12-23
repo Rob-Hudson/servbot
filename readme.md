@@ -81,22 +81,28 @@ Set any value to 0 to disable antiflood protection.
 If port is 6697, the bot will try to connect with TLS.
 If the normal verification fails, set `insecure_skip_verify` to `true` in the configuration file.
 When the bot tries to connect, it will print the fingerprints. Set `tls_fingerprints` to a list of fingerprints you want to consider verified.
+
 ## Starting the bot
 There is a startup directory containing a systemd service file. Place it in your systemd  user directory, by issuing the following commands:
-mkdir -pv ~/.config/systemd/user
-cp ./startup/servbot.service ~/config/systemd/user
-Edit the file with your username and group. Then, optionally type the following:
-systemctl --user enable servbot
+
+* mkdir -pv ~/.config/systemd/user
+
+* cp ./startup/servbot.service ~/config/systemd/user
+
+* Edit the file with your username and group. Then, optionally type the following:
+
+* systemctl --user enable servbot
+
 Or, if you do not wish to have the bot launch on startup, type:
-systemctl --user start servbot
+
+* systemctl --user start servbot
 
 To monitor the service, use the following commands:
 
-Check status
-systemctl --user status servvbot
-Check the bot's log
-journalctl --user -u servbot.service -f
-Stop service
-systemctl --user stop servbot.service
-Restart service
-systemctl --user restart servbot.service
+* Check status - systemctl --user status servvbot
+
+* Check the bot's log - journalctl --user -u servbot.service -f
+
+* Stop service - systemctl --user stop servbot.service
+
+* Restart service - systemctl --user restart servbot.service
