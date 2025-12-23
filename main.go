@@ -53,6 +53,7 @@ type BotState struct {
 	generating     bool
 	dccStats       *DCCStats
 	ignores        *IgnoreList
+	flood          *FloodTracker
 }
 
 
@@ -73,6 +74,10 @@ type Config struct {
 	RemovedPrefixes    []string `toml:"removed_prefixes"`
 	InsecureSkipVerify bool     `toml:"insecure_skip_verify"`
 	TLSFingerprints    []string `toml:"tls_fingerprints"`
+	// Antiflood settings
+	FloodMaxRequests    int `toml:"flood_max_requests"`    // Max requests in window (0 = disabled)
+	FloodWindowSeconds  int `toml:"flood_window_seconds"`  // Time window in seconds
+	FloodIgnoreSeconds  int `toml:"flood_ignore_seconds"`  // How long to ignore flooder
 }
 
 type ConfigList struct {
@@ -121,6 +126,11 @@ func main() {    // --- ADDED PID FILE CREATION ---
 	state.dccStats = loadStats()
 	state.ignores = LoadIgnores()
 	log.Printf("Loaded %d ignore entries", len(state.ignores.Entries))
+	state.flood = NewFloodTracker()
+	if state.cfg.FloodMaxRequests > 0 && state.cfg.FloodWindowSeconds > 0 && state.cfg.FloodIgnoreSeconds > 0 {
+		log.Printf("Antiflood enabled: %d requests in %ds window, %ds ignore",
+			state.cfg.FloodMaxRequests, state.cfg.FloodWindowSeconds, state.cfg.FloodIgnoreSeconds)
+	}
 	startStatsChecker(&state)
 	state.ports = make(map[int]string)
 	state.joinedChannels = make(map[string]bool)

@@ -35,3 +35,11 @@ listpaths = ["/files"]
 # controller = "owner"
 # Optional list of prefixes to remove from directory names.
 # removed_prefixes = ["/home/username"]
+
+# Antiflood protection settings (all values must be set to enable)
+# Maximum requests allowed within the time window before user is ignored
+flood_max_requests = 5
+# Time window in seconds for counting requests
+flood_window_seconds = 10
+# How long to ignore the user (in seconds) when they exceed the limit
+flood_ignore_seconds = 300

@@ -36,11 +36,48 @@ func (t Trigger) Handle(bot *hbot.Bot, m *hbot.Message) {
 
 var colonRe = regexp.MustCompile(` *:.*$`)
 
+// checkFlood checks if a user is flooding and handles the ignore if so.
+// Returns true if the request should be blocked (user is flooding).
+func checkFlood(state *BotState, m *hbot.Message) bool {
+	// Check if antiflood is enabled
+	if state.cfg.FloodMaxRequests <= 0 || state.cfg.FloodWindowSeconds <= 0 || state.cfg.FloodIgnoreSeconds <= 0 {
+		return false
+	}
+
+	hostmask := getHostmask(m)
+	window := time.Duration(state.cfg.FloodWindowSeconds) * time.Second
+
+	// Record request and check if flooding
+	if state.flood.RecordRequest(hostmask, state.cfg.FloodMaxRequests, window) {
+		// User is flooding - add to ignore list
+		userHost := getUserHost(hostmask)
+		pattern := "*!*@" + strings.Split(userHost, "@")[1] // *!*@host pattern
+		ignoreDuration := time.Duration(state.cfg.FloodIgnoreSeconds) * time.Second
+
+		state.ignores.Add(pattern, ignoreDuration, "antiflood")
+		if err := state.ignores.Save(); err != nil {
+			log.Printf("Error saving ignores after flood: %v", err)
+		}
+
+		// Notify user
+		msg := fmt.Sprintf("You have been blocked for %s for flooding (%d requests in %ds).",
+			FormatDuration(ignoreDuration), state.cfg.FloodMaxRequests, state.cfg.FloodWindowSeconds)
+		state.bot.Notice(m.Prefix.Name, msg)
+
+		log.Printf("Antiflood: blocked %s for %s", pattern, FormatDuration(ignoreDuration))
+		return true
+	}
+	return false
+}
+
 var sendTrigger = Trigger{
 	Condition: func(state *BotState, m *hbot.Message) bool {
 		if strings.HasPrefix(m.Param(0), "#") && strings.HasPrefix(m.Trailing(), "!"+state.cfg.Prefix) {
 			if state.ignores.IsIgnored(getHostmask(m)) {
 				log.Printf("Ignored file request from %s", getHostmask(m))
+				return false
+			}
+			if checkFlood(state, m) {
 				return false
 			}
 			return true
@@ -72,6 +109,9 @@ var sendListTrigger = Trigger{
 		if strings.HasPrefix(m.Param(0), "#") && strings.HasPrefix(strings.ToLower(m.Trailing()), "@"+strings.ToLower(state.cfg.Prefix)) {
 			if state.ignores.IsIgnored(getHostmask(m)) {
 				log.Printf("Ignored list request from %s", getHostmask(m))
+				return false
+			}
+			if checkFlood(state, m) {
 				return false
 			}
 			return true
@@ -226,8 +266,18 @@ var privmsgTrigger = Trigger{
 				formatBytes(stats.TotalBytes))
 
 			state.bot.Msg(m.Prefix.Name, msg)
-		
-		 } else if m.Trailing() == "genlist" {
+
+		} else if m.Trailing() == "flood" {
+			if state.cfg.FloodMaxRequests <= 0 || state.cfg.FloodWindowSeconds <= 0 {
+				state.bot.Msg(m.Prefix.Name, "Antiflood is disabled.")
+			} else {
+				msg := fmt.Sprintf("Antiflood: %d requests in %ds window, %ds ignore. Tracking %d users.",
+					state.cfg.FloodMaxRequests, state.cfg.FloodWindowSeconds,
+					state.cfg.FloodIgnoreSeconds, state.flood.ActiveUsers())
+				state.bot.Msg(m.Prefix.Name, msg)
+			}
+
+		} else if m.Trailing() == "genlist" {
 			if state.generating {
 				state.bot.Msg(m.Prefix.Name, "Generation already in progress.")
 				return
