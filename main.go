@@ -130,6 +130,7 @@ func main() {    // --- ADDED PID FILE CREATION ---
 	if state.cfg.FloodMaxRequests > 0 && state.cfg.FloodWindowSeconds > 0 && state.cfg.FloodIgnoreSeconds > 0 {
 		log.Printf("Antiflood enabled: %d requests in %ds window, %ds ignore",
 			state.cfg.FloodMaxRequests, state.cfg.FloodWindowSeconds, state.cfg.FloodIgnoreSeconds)
+		startAntifloodChecker(&state)
 	}
 	startStatsChecker(&state)
 	state.ports = make(map[int]string)
@@ -260,4 +261,29 @@ func verifyPeerCertificate(config Config, rawCerts [][]byte, verifiedChains [][]
 		fmt.Printf("Fingerprint: %s\n", fingerprints[i])
 	}
 	return errors.New("No fingerprint matched")
+}
+
+// startAntifloodChecker starts a goroutine that periodically checks for expired
+// antiflood entries and notifies the controller when users are unblocked
+func startAntifloodChecker(state *BotState) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			expired := state.ignores.CleanExpiredWithReason("antiflood")
+			if len(expired) > 0 {
+				if err := state.ignores.Save(); err != nil {
+					log.Printf("Error saving ignores after antiflood cleanup: %v", err)
+				}
+				for _, e := range expired {
+					log.Printf("Antiflood: unblocked %s", e.Pattern)
+					if state.cfg.Controller != "" && state.bot != nil {
+						state.bot.Msg(state.cfg.Controller, fmt.Sprintf("Antiflood: unblocked %s", e.Pattern))
+					}
+				}
+			}
+			// Also clean up old flood tracker entries
+			state.flood.Clean(time.Duration(state.cfg.FloodWindowSeconds*2) * time.Second)
+		}
+	}()
 }

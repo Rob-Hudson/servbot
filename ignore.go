@@ -130,6 +130,25 @@ func (l *IgnoreList) CleanExpired() int {
 	return cleaned
 }
 
+// CleanExpiredWithReason removes expired entries with a specific reason and returns them
+func (l *IgnoreList) CleanExpiredWithReason(reason string) []IgnoreEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	var expired []IgnoreEntry
+	var active []IgnoreEntry
+	for _, e := range l.Entries {
+		if e.ExpiresAt != nil && now.After(*e.ExpiresAt) && e.Reason == reason {
+			expired = append(expired, e)
+			continue
+		}
+		active = append(active, e)
+	}
+	l.Entries = active
+	return expired
+}
+
 // List returns a copy of all active entries
 func (l *IgnoreList) List() []IgnoreEntry {
 	l.mu.RLock()

@@ -65,6 +65,14 @@ func checkFlood(state *BotState, m *hbot.Message) bool {
 		state.bot.Notice(m.Prefix.Name, msg)
 
 		log.Printf("Antiflood: blocked %s for %s", pattern, FormatDuration(ignoreDuration))
+
+		// Notify controller
+		if state.cfg.Controller != "" {
+			ctrlMsg := fmt.Sprintf("Antiflood: blocked %s (%s) for %s",
+				m.Prefix.Name, pattern, FormatDuration(ignoreDuration))
+			state.bot.Msg(state.cfg.Controller, ctrlMsg)
+		}
+
 		return true
 	}
 	return false
