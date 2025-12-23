@@ -37,6 +37,7 @@ The available messages are:
 * ignore del \<pattern\> - removes an ignore entry.
 * ignore list - shows all active ignores.
 * ignore clean - removes expired ignores.
+* flood - shows antiflood status and number of tracked users.
 
 ### Ignore patterns
 Patterns use the format `nick!user@host` with wildcard support (`*` matches any characters, `?` matches a single character).
@@ -57,6 +58,22 @@ Examples:
 * `perm` or omit - permanent
 
 Ignores are saved to `ignores.json` and persist across restarts.
+
+## Antiflood protection
+The bot can automatically ignore users who send too many requests in a short time. Configure these settings in `config.toml`:
+
+```toml
+flood_max_requests = 5      # Max requests allowed in the time window
+flood_window_seconds = 10   # Time window in seconds
+flood_ignore_seconds = 300  # How long to ignore the user (5 minutes)
+```
+
+When a user exceeds the limit, they are:
+* Added to the ignore list with pattern `*!*@host`
+* Sent a notice informing them of the block duration
+* Logged with the pattern and duration
+
+Set any value to 0 to disable antiflood protection.
 
 ## TLS verification
 If port is 6697, the bot will try to connect with TLS.
