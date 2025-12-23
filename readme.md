@@ -73,6 +73,8 @@ When a user exceeds the limit, they are:
 * Sent a notice informing them of the block duration
 * Logged with the pattern and duration
 
+If a controller is configured, they will receive notifications when users are blocked and unblocked.
+
 Set any value to 0 to disable antiflood protection.
 
 ## TLS verification
