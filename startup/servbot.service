@@ -1,0 +1,20 @@
+[Unit]
+Description=Servbot service
+After=network.target
+
+[Service]
+Type=forking
+# 1. Define the user who runs the service
+User=<enter your username here>>
+Group=<enter your group, usually same as your username.
+# 2. Set WorkingDirectory using the user's Home Directory (%h)
+# This is where config.toml and servbot.pid will be created/read.
+WorkingDirectory=%h/servbot
+# 3. Specify the PID file path using %h
+PIDFile=%h/servbot/servbot.pid
+# 4. Specify the ExecStart path using %h
+ExecStart=%h/servbot/servbot serve
+Restart=always
+
+[Install]
+WantedBy=default.target
