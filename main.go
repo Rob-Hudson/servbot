@@ -263,6 +263,35 @@ func verifyPeerCertificate(config Config, rawCerts [][]byte, verifiedChains [][]
 	return errors.New("No fingerprint matched")
 }
 
+func (state *BotState) Rehash() error {
+	var newCfg Config
+	_, err := toml.DecodeFile("config.toml", &newCfg)
+	if err != nil {
+		return err
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	state.cfg = newCfg
+
+	// Rebuild adChannels map
+	state.adChannels = make(map[string]bool)
+	for _, c := range state.cfg.AdChannels {
+		state.adChannels[c] = true
+	}
+	
+	// Re-check antiflood settings if they were disabled and now enabled, 
+	// or vice versa, but that requires restarting the checker which is complex.
+	// For now, the existing checker will just pick up the new values (since it reads state.cfg).
+	// If it was 0 and now >0, the checker is running (it's always started if enabled at start, wait).
+	// Currently startAntifloodChecker is only called in main() if enabled.
+	// If it was disabled at start, the checker isn't running.
+	// We won't support enabling antiflood via rehash if it was disabled at start.
+	// But updating values (e.g. window size) will work if it's already running.
+
+	return nil
+}
+
 // startAntifloodChecker starts a goroutine that periodically checks for expired
 // antiflood entries and notifies the controller when users are unblocked
 func startAntifloodChecker(state *BotState) {
@@ -275,15 +304,23 @@ func startAntifloodChecker(state *BotState) {
 				if err := state.ignores.Save(); err != nil {
 					log.Printf("Error saving ignores after antiflood cleanup: %v", err)
 				}
+				
+				state.mu.Lock()
+				controller := state.cfg.Controller
+				state.mu.Unlock()
+
 				for _, e := range expired {
 					log.Printf("Antiflood: unblocked %s", e.Pattern)
-					if state.cfg.Controller != "" && state.bot != nil {
-						state.bot.Msg(state.cfg.Controller, fmt.Sprintf("Antiflood: unblocked %s", e.Pattern))
+					if controller != "" && state.bot != nil {
+						state.bot.Msg(controller, fmt.Sprintf("Antiflood: unblocked %s", e.Pattern))
 					}
 				}
 			}
 			// Also clean up old flood tracker entries
-			state.flood.Clean(time.Duration(state.cfg.FloodWindowSeconds*2) * time.Second)
+			state.mu.Lock()
+			window := state.cfg.FloodWindowSeconds
+			state.mu.Unlock()
+			state.flood.Clean(time.Duration(window*2) * time.Second)
 		}
 	}()
 }

@@ -33,12 +33,12 @@ The available messages are:
 * stats - shows number of files and sum total of bytes sent, as of the prior midnight.
 * transfers - shows the map of in-progress transfers to nicknames.
 * genlist - starts a refresh of the file list. The bot will tell you what happened. For more complete output, check the log.
+* Rehash - reloads configuration without having to restart. Useful, for example, if you add a new directory to the list.
 * ignore add \<pattern\> [duration] [reason] - adds an ignore entry.
 * ignore del \<pattern\> - removes an ignore entry.
 * ignore list - shows all active ignores.
 * ignore clean - removes expired ignores.
 * flood - shows antiflood status and number of tracked users.
-
 ### Ignore patterns
 Patterns use the format `nick!user@host` with wildcard support (`*` matches any characters, `?` matches a single character).
 
@@ -85,17 +85,22 @@ When the bot tries to connect, it will print the fingerprints. Set `tls_fingerpr
 ## Starting the bot
 There is a startup directory containing a systemd service file. Place it in your systemd  user directory, by issuing the following commands:
 
-* mkdir -pv ~/.config/systemd/user
+``` bash
+mkdir -pv ~/.config/systemd/user
 
-* cp ./startup/servbot.service ~/config/systemd/user
+cp ./startup/servbot.service ~/config/systemd/user
+```
 
-* Edit the file with your username and group. Then, optionally type the following:
+Edit the file with your username and group. Then, optionally type the following:
+``` bash
 
-* systemctl --user enable servbot
-
+systemctl --user enable servbot
+```
 Or, if you do not wish to have the bot launch on startup, type:
 
-* systemctl --user start servbot
+``` bash
+systemctl --user start servbot
+```
 
 To monitor the service, use the following commands:
 

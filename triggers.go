@@ -285,6 +285,13 @@ var privmsgTrigger = Trigger{
 				state.bot.Msg(m.Prefix.Name, msg)
 			}
 
+		} else if m.Trailing() == "rehash" {
+			if err := state.Rehash(); err != nil {
+				state.bot.Msg(m.Prefix.Name, fmt.Sprintf("Error reloading config: %v", err))
+			} else {
+				state.bot.Msg(m.Prefix.Name, "Configuration reloaded.")
+			}
+
 		} else if m.Trailing() == "genlist" {
 			if state.generating {
 				state.bot.Msg(m.Prefix.Name, "Generation already in progress.")
