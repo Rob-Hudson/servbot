@@ -33,7 +33,7 @@ The available messages are:
 * stats - shows number of files and sum total of bytes sent, as of the prior midnight.
 * transfers - shows the map of in-progress transfers to nicknames.
 * genlist - starts a refresh of the file list. The bot will tell you what happened. For more complete output, check the log.
-* Rehash - reloads configuration without having to restart. Useful, for example, if you add a new directory to the list.
+* rehash - reloads configuration without having to restart. Useful, for example, if you add a new directory to the list.
 * ignore add \<pattern\> [duration] [reason] - adds an ignore entry.
 * ignore del \<pattern\> - removes an ignore entry.
 * ignore list - shows all active ignores.
