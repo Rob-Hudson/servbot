@@ -3,6 +3,9 @@ Servbot is a file server for IRC. It allows people to download files through DCC
 
 ## Requirements
 You need one port per active simultaneous download.
+
+In the configuration file, ports must be comma separated. E.G [123,124,125] etc.
+
 If all ports are used, newly requested files will be queued.
 
 ## Usage
@@ -27,13 +30,13 @@ Note that all directories in the sub-lists must be in listpaths, otherwise downl
 If `controller` is set in the config file, anyone with that nickname can control the bot through IRC messages.
 The available messages are:
 
-* shutdown - shuts down the bot.
+* shutdown - shuts down the bot (requires password).
 * queue - shows the queue.
 * clear - clears the queue.
 * stats - shows number of files and sum total of bytes sent, as of the prior midnight.
 * transfers - shows the map of in-progress transfers to nicknames.
 * genlist - starts a refresh of the file list. The bot will tell you what happened. For more complete output, check the log.
-* rehash - reloads configuration without having to restart. Useful, for example, if you add a new directory to the list.
+* rehash - reloads configuration without having to restart. Useful, for example, if you add a new directory to the list, or delete/add channels.
 * ignore add \<pattern\> [duration] [reason] - adds an ignore entry.
 * ignore del \<pattern\> - removes an ignore entry.
 * ignore list - shows all active ignores.

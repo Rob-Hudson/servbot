@@ -33,6 +33,8 @@ listpaths = ["/files"]
 # ]
 # The controller of the bot, optional
 # controller = "owner"
+# Password to shut down the bot
+# shutdown_password = "changeme"
 # Optional list of prefixes to remove from directory names.
 # removed_prefixes = ["/home/username"]
 

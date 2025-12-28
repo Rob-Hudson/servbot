@@ -241,13 +241,22 @@ var privmsgTrigger = Trigger{
 		if state.cfg.Controller == "" || m.Prefix.Name != state.cfg.Controller {
 			return
 		}
-		if m.Trailing() == "shutdown" {
-			state.bot.Msg(m.Prefix.Name, "Shutting down.")
-			time.Sleep(1 * time.Second)
-			state.bot.Close()
-			// --- PID FILE DELETION ADDED ---
-			removePidFile()
-			os.Exit(0)
+		if strings.HasPrefix(m.Trailing(), "shutdown ") {
+			parts := strings.Fields(m.Trailing())
+			if len(parts) != 2 {
+				state.bot.Msg(m.Prefix.Name, "Usage: shutdown <password>")
+				return
+			}
+			if parts[1] == state.cfg.ShutdownPassword {
+				state.bot.Msg(m.Prefix.Name, "Shutting down.")
+				time.Sleep(1 * time.Second)
+				state.bot.Close()
+				// --- PID FILE DELETION ADDED ---
+				removePidFile()
+				os.Exit(0)
+			} else {
+				state.bot.Msg(m.Prefix.Name, "Incorrect password.")
+			}
 		} else if m.Trailing() == "queue" {
 			state.bot.Msg(m.Prefix.Name, fmt.Sprintf("%d queued items.", len(state.queue)))
 			for _, e := range state.queue {
@@ -262,7 +271,7 @@ var privmsgTrigger = Trigger{
 		} else if m.Trailing() == "transfers" {
 			msg := fmt.Sprintf("%v", state.ports)
 			state.bot.Msg(m.Prefix.Name, msg)
-// --- STATS COMMAND ADDED ---
+			// --- STATS COMMAND ADDED ---
 		} else if m.Trailing() == "stats" {
 			state.mu.Lock()
 			stats := state.dccStats
@@ -285,7 +294,7 @@ var privmsgTrigger = Trigger{
 				state.bot.Msg(m.Prefix.Name, msg)
 			}
 
-		} else if m.Trailing() == "rehash" {
+		} else if strings.ToLower(m.Trailing()) == "rehash" {
 			if err := state.Rehash(); err != nil {
 				state.bot.Msg(m.Prefix.Name, fmt.Sprintf("Error reloading config: %v", err))
 			} else {

@@ -71,6 +71,7 @@ type Config struct {
 	InitialCommand     string `toml:"initial_command"`
 	Lists              []ConfigList
 	Controller         string
+	ShutdownPassword   string   `toml:"shutdown_password"`
 	RemovedPrefixes    []string `toml:"removed_prefixes"`
 	InsecureSkipVerify bool     `toml:"insecure_skip_verify"`
 	TLSFingerprints    []string `toml:"tls_fingerprints"`
@@ -270,9 +271,23 @@ func (state *BotState) Rehash() error {
 		return err
 	}
 
+	// Join new channels and part from removed channels
+	for _, channel := range newCfg.Channels {
+		if !slices.Contains(state.cfg.Channels, channel) {
+			state.bot.Join(channel)
+			log.Printf("Joining new channel from rehash: %s", channel)
+		}
+	}
+	for _, channel := range state.cfg.Channels {
+		if !slices.Contains(newCfg.Channels, channel) {
+			state.bot.Part(channel, "Rehashing configuration")
+			log.Printf("Parting channel removed on rehash: %s", channel)
+		}
+	}
+
 	state.mu.Lock()
-	defer state.mu.Unlock()
 	state.cfg = newCfg
+	state.mu.Unlock()
 
 	// Rebuild adChannels map
 	state.adChannels = make(map[string]bool)
