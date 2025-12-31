@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall" // Added for Windows socket options
 	"time"
 )
 
@@ -17,7 +19,7 @@ import (
 type DCCStats struct {
 	FileCount    int   `json:"file_count"`
 	TotalBytes   int64 `json:"total_bytes"`
-	LastResetDay int   `json:"last_reset_day"` // Day of year when stats were last reset
+	LastResetDay int   `json:"last_reset_day"`
 }
 
 const statsFile = "dcc_stats.json"
@@ -27,33 +29,27 @@ const maxQueuePerUser = 3
 func loadStats() *DCCStats {
 	data, err := os.ReadFile(statsFile)
 	if err != nil {
-		// File doesn't exist or can't be read, return new stats
 		return &DCCStats{LastResetDay: time.Now().YearDay()}
 	}
-	
 	var stats DCCStats
 	if err := json.Unmarshal(data, &stats); err != nil {
 		log.Printf("Error unmarshaling stats: %v", err)
 		return &DCCStats{LastResetDay: time.Now().YearDay()}
 	}
-	
 	return &stats
 }
 
-// saveStats saves statistics to disk
 func saveStats(stats *DCCStats) {
 	data, err := json.Marshal(stats)
 	if err != nil {
 		log.Printf("Error marshaling stats: %v", err)
 		return
 	}
-	
 	if err := os.WriteFile(statsFile, data, 0644); err != nil {
 		log.Printf("Error writing stats file: %v", err)
 	}
 }
 
-// formatBytes converts bytes to human-readable format
 func formatBytes(bytes int64) string {
 	const (
 		KB = 1024
@@ -61,7 +57,6 @@ func formatBytes(bytes int64) string {
 		GB = 1024 * MB
 		TB = 1024 * GB
 	)
-	
 	switch {
 	case bytes >= TB:
 		return fmt.Sprintf("%.2f TB", float64(bytes)/float64(TB))
@@ -76,27 +71,19 @@ func formatBytes(bytes int64) string {
 	}
 }
 
-// checkAndReportStats checks if it's time to report daily stats and does so if needed
 func checkAndReportStats(state *BotState) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	
 	now := time.Now()
 	currentDay := now.YearDay()
-	
-	// Check if we've crossed into a new day
 	if state.dccStats.LastResetDay != currentDay {
-		// Report previous day's statistics
 		if state.dccStats.FileCount > 0 || state.dccStats.TotalBytes > 0 {
 			msg := fmt.Sprintf("Daily statistics: sent %d file(s) (%s)",
 				state.dccStats.FileCount,
 				formatBytes(state.dccStats.TotalBytes))
-			
 			log.Printf("DCC %s", msg)
 			state.bot.Msg(state.cfg.Controller, msg)
 		}
-		
-		// Reset statistics for the new day
 		state.dccStats.FileCount = 0
 		state.dccStats.TotalBytes = 0
 		state.dccStats.LastResetDay = currentDay
@@ -104,27 +91,21 @@ func checkAndReportStats(state *BotState) {
 	}
 }
 
-// recordTransfer records a successful file transfer
 func recordTransfer(state *BotState, bytes int64) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	
 	state.dccStats.FileCount++
 	state.dccStats.TotalBytes += bytes
 	saveStats(state.dccStats)
 }
 
-// startStatsChecker starts a goroutine that checks for day rollover at 12:01 AM
 func startStatsChecker(state *BotState) {
 	go func() {
 		for {
 			now := time.Now()
-			// Calculate time until 12:01 AM tomorrow
 			tomorrow := now.Add(24 * time.Hour)
 			midnight := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 1, 0, 0, now.Location())
-			duration := midnight.Sub(now)
-			
-			time.Sleep(duration)
+			time.Sleep(midnight.Sub(now))
 			checkAndReportStats(state)
 		}
 	}()
@@ -133,39 +114,50 @@ func startStatsChecker(state *BotState) {
 func dccSend(state *BotState, nick string, fname string, wantedFname string, port int) {
 	log.Printf("Sending %s to %s on port %d", fname, nick, port)
 	defer freePort(state, port)
-	addr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(port))
-	if err != nil {
-		log.Printf("Error resolving: %v", err)
-		return
+
+	// Use ListenConfig to set socket options for Windows/Linux port reuse
+	lc := net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				            // This now calls the version in socket_windows.go 
+				                        // or socket_unix.go depending on build environment.
+				                                    setReuseAddr(fd) 
+							})
+		},
 	}
-	l, err := net.ListenTCP("tcp", addr)
+
+	l, err := lc.Listen(context.Background(), "tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		log.Printf("Error listening on %d: %v", port, err)
 		return
 	}
 	defer l.Close()
+
 	st, err := os.Stat(fname)
 	if err != nil {
 		log.Printf("Stat %s: %v", fname, err)
 		return
 	}
+
 	ip := ip2int(state.ip)
 	msg := fmt.Sprintf("\u0001DCC SEND \"%s\" %d %d %d\u0001", wantedFname, ip, port, st.Size())
 	state.bot.Msg(nick, msg)
-	// The receiver might not accept the file, and might not connect. Guard against that case.
-	l.SetDeadline(time.Now().Add(60 * time.Second))
+
+	l.(*net.TCPListener).SetDeadline(time.Now().Add(60 * time.Second))
 	conn, err := l.Accept()
 	if err != nil {
 		log.Printf("Error accepting on %d: %v", port, err)
 		return
 	}
 	defer conn.Close()
+
 	fp, err := os.Open(fname)
 	if err != nil {
 		log.Printf("Error opening %s: %v", fname, err)
 		return
 	}
 	defer fp.Close()
+
 	ch := make(chan bool)
 	go func() {
 		buf := make([]byte, 4)
@@ -183,58 +175,68 @@ func dccSend(state *BotState, nick string, fname string, wantedFname string, por
 			}
 		}
 	}()
+
 	n, err := io.Copy(conn, fp)
 	if err != nil {
 		log.Printf("Transfer error: %v", err)
 	}
 	<-ch
-	conn.Close()
 	log.Printf("Transfer of %d on %d to %s complete", n, port, nick)
 	
-	// Record successful transfer
 	recordTransfer(state, n)
-	
-	 state.bot.Msg(state.cfg.Controller, fmt.Sprintf("Successfully sent %s to %s", filepath.Base(fname), nick))
+	state.bot.Msg(state.cfg.Controller, fmt.Sprintf("Successfully sent %s to %s", filepath.Base(fname), nick))
 }
 
+// getUnusedPort uses a Round Robin approach to avoid hammering the same port
 func getUnusedPort(state *BotState) int {
-	for _, port := range state.availablePorts {
+	for i := 0; i < len(state.availablePorts); i++ {
+		// Calculate next index to check
+		idx := (state.lastPortIndex + i + 1) % len(state.availablePorts)
+		port := state.availablePorts[idx]
+		
 		if state.ports[port] == "" && !state.closing[port] {
+			state.lastPortIndex = idx // Update the last used index
 			return port
 		}
 	}
 	return -1
 }
 
-// Frees the transfer on this port, and starts the next queued item if any.
+// freePort marks a port as closing and waits for OS cleanup before triggering next queue item
 func freePort(state *BotState, port int) {
 	state.mu.Lock()
-	defer state.mu.Unlock()
 	if _, ok := state.ports[port]; !ok {
+		state.mu.Unlock()
 		return
 	}
 	delete(state.ports, port)
 	state.closing[port] = true
+	state.mu.Unlock()
+
+	// Launch a background timer to ensure the port is released by the OS
 	go func() {
 		time.Sleep(time.Second * 5)
 		state.mu.Lock()
-		defer state.mu.Unlock()
 		delete(state.closing, port)
-	}()
-	if len(state.queue) > 0 {
-		var item QueueEntry
-		item, state.queue = state.queue[0], state.queue[1:]
-		port := getUnusedPort(state)
-		if port != -1 {
-			state.ports[port] = item.nick
-			go dccSend(state, item.nick, item.filename, item.wanted, port)
-		} else {
-			state.queue = append([]QueueEntry{item}, state.queue...)
+		
+		// NOW that the port is truly available, check if we should start a queued item
+		if len(state.queue) > 0 {
+			var item QueueEntry
+			item, state.queue = state.queue[0], state.queue[1:]
+			
+			nextPort := getUnusedPort(state)
+			if nextPort != -1 {
+				state.ports[nextPort] = item.nick
+				go dccSend(state, item.nick, item.filename, item.wanted, nextPort)
+			} else {
+				// If somehow still no ports, put it back at the front
+				state.queue = append([]QueueEntry{item}, state.queue...)
+			}
 		}
-	}
+		state.mu.Unlock()
+	}()
 }
 
-// countQueuedFiles counts how many files a user has in the queue
 func countQueuedFiles(state *BotState, nick string) int {
 	count := 0
 	for _, entry := range state.queue {
@@ -245,8 +247,6 @@ func countQueuedFiles(state *BotState, nick string) int {
 	return count
 }
 
-// Checks to see whether an entry should be queued.
-// Returns true if the nick is already being sent to, or if all ports are used.
 func shouldQueue(state *BotState, nick string) bool {
 	for _, v := range state.ports {
 		if v == nick {
@@ -259,8 +259,6 @@ func shouldQueue(state *BotState, nick string) bool {
 	return false
 }
 
-// isQueueFull checks if a user has reached their queue limit
-// Returns true if the user has maxQueuePerUser or more files queued
 func isQueueFull(state *BotState, nick string) bool {
 	return countQueuedFiles(state, nick) >= maxQueuePerUser
 }

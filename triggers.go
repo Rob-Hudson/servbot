@@ -140,16 +140,18 @@ var sendListTrigger = Trigger{
 			if !cut {
 				return
 			}
-			if strings.Contains(listname, "/") || strings.Contains(listname, "\\") {
+			if strings.Contains(listname, "/") || strings.Contains(listname, "\\") || strings.Contains(listname, "..") {
 				return
 			}
-			fi, err := os.Stat("filelists/" + listname + ".zip")
+						// OS-Agnostic Path Construction
+			listPath := filepath.Join("filelists", listname+".zip") 
+						fi, err := os.Stat(listPath) 
 			if err != nil {
 				log.Printf("Looking for list %s: %s", listname, err)
 				return
 			}
 			date := fi.ModTime().Format(time.DateOnly)
-			listFn = "filelists/" + listname + ".zip"
+			listFn = listPath
 			fn = state.cfg.Nick + "_" + listname + "_" + date + ".zip"
 		}
 		state.mu.Lock()

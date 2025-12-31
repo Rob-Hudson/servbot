@@ -55,6 +55,7 @@ type BotState struct {
 	ignores        *IgnoreList
 	flood          *FloodTracker
 	closing        map[int]bool
+	lastPortIndex  int 
 }
 
 
