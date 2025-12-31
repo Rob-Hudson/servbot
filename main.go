@@ -54,6 +54,7 @@ type BotState struct {
 	dccStats       *DCCStats
 	ignores        *IgnoreList
 	flood          *FloodTracker
+	closing        map[int]bool
 }
 
 
@@ -135,6 +136,7 @@ func main() {    // --- ADDED PID FILE CREATION ---
 	}
 	startStatsChecker(&state)
 	state.ports = make(map[int]string)
+	state.closing = make(map[int]bool)
 	state.joinedChannels = make(map[string]bool)
 	state.adChannels = make(map[string]bool)
 	for _, c := range state.cfg.AdChannels {

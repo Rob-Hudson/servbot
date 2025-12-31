@@ -132,23 +132,21 @@ func startStatsChecker(state *BotState) {
 
 func dccSend(state *BotState, nick string, fname string, wantedFname string, port int) {
 	log.Printf("Sending %s to %s on port %d", fname, nick, port)
+	defer freePort(state, port)
 	addr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		log.Printf("Error resolving: %v", err)
-		freePort(state, port)
 		return
 	}
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		log.Printf("Error listening on %d: %v", port, err)
-		freePort(state, port)
 		return
 	}
 	defer l.Close()
 	st, err := os.Stat(fname)
 	if err != nil {
 		log.Printf("Stat %s: %v", fname, err)
-		freePort(state, port)
 		return
 	}
 	ip := ip2int(state.ip)
@@ -159,14 +157,12 @@ func dccSend(state *BotState, nick string, fname string, wantedFname string, por
 	conn, err := l.Accept()
 	if err != nil {
 		log.Printf("Error accepting on %d: %v", port, err)
-		freePort(state, port)
 		return
 	}
 	defer conn.Close()
 	fp, err := os.Open(fname)
 	if err != nil {
 		log.Printf("Error opening %s: %v", fname, err)
-		freePort(state, port)
 		return
 	}
 	defer fp.Close()
@@ -198,13 +194,12 @@ func dccSend(state *BotState, nick string, fname string, wantedFname string, por
 	// Record successful transfer
 	recordTransfer(state, n)
 	
-	freePort(state, port)
 	 state.bot.Msg(state.cfg.Controller, fmt.Sprintf("Successfully sent %s to %s", filepath.Base(fname), nick))
 }
 
 func getUnusedPort(state *BotState) int {
 	for _, port := range state.availablePorts {
-		if state.ports[port] == "" {
+		if state.ports[port] == "" && !state.closing[port] {
 			return port
 		}
 	}
@@ -215,12 +210,27 @@ func getUnusedPort(state *BotState) int {
 func freePort(state *BotState, port int) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
+	if _, ok := state.ports[port]; !ok {
+		return
+	}
 	delete(state.ports, port)
+	state.closing[port] = true
+	go func() {
+		time.Sleep(time.Second * 5)
+		state.mu.Lock()
+		defer state.mu.Unlock()
+		delete(state.closing, port)
+	}()
 	if len(state.queue) > 0 {
 		var item QueueEntry
 		item, state.queue = state.queue[0], state.queue[1:]
-		state.ports[port] = item.nick
-		go dccSend(state, item.nick, item.filename, item.wanted, port)
+		port := getUnusedPort(state)
+		if port != -1 {
+			state.ports[port] = item.nick
+			go dccSend(state, item.nick, item.filename, item.wanted, port)
+		} else {
+			state.queue = append([]QueueEntry{item}, state.queue...)
+		}
 	}
 }
 
